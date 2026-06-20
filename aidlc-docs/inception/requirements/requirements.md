@@ -123,6 +123,8 @@ The app must support the PRD demo flow: create ticket rule, scan demo prompt, pa
 
 ## Non-Functional Requirements
 
+Additional Azure cloud integration requirements are tracked separately in `aidlc-docs/inception/requirements/azure-cloud-integration-addendum.md` to keep this core requirements document focused on the MVP baseline.
+
 ### NFR-001 Performance
 The app should scan the demo prompt in under 1 second in a local browser and deployed MVP environment.
 

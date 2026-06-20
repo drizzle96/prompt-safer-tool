@@ -23,8 +23,7 @@ Custom Rule → Preview → Apply to Session → Scan
 2. **Custom Rule Builder**  
    회사마다 다른 티켓 번호, 내부 프로젝트 코드, 배포 URL, 고객사 코드, 운영 환경명 같은 조직별 패턴을 사용자가 직접 정규식으로 작성하지 않아도 더미 예시만으로 추가할 수 있게 한다. Copilot SDK는 이 custom rule 생성과 테스트 케이스 생성에 사용한다.
 
-3. **Safe Review**  
-   사용자가 치환을 완료한 뒤, 원본이 아닌 `transformedText`만 Azure OpenAI 또는 Microsoft Foundry로 보내 잔여 위험을 설명한다.
+3. **Safe Review**: 사용자가 치환을 완료한 뒤, 원본이 아닌 `transformedText`와 finding metadata만 검토해 잔여 위험을 설명한다. MVP에서는 deterministic checklist로 제공하고, Azure OpenAI 또는 Microsoft Foundry는 선택적 provider로만 둔다.
 
 ---
 
@@ -37,7 +36,7 @@ Custom Rule → Preview → Apply to Session → Scan
 | 웹 앱 필수 | React + Vite + TypeScript 기반 단일 웹 앱 |
 | Copilot SDK 필수 | 메인 기능인 Custom Rule Builder에서 조직별 custom rule, 테스트 케이스, false positive/negative 주의사항을 생성하는 데 사용 |
 | Azure 배포 필수 | Azure Static Web Apps + Azure Functions로 배포 |
-| Azure AI & Cloud Integration | Azure Functions에서 deterministic scan/mask를 수행하고, Azure OpenAI 또는 Microsoft Foundry는 치환된 텍스트의 Safe Review에 사용 |
+| Azure AI & Cloud Integration | Azure Static Web Apps + Azure Functions를 핵심 처리 계층으로 사용한다. Azure Functions는 deterministic scan/mask, custom rule generation/preview, safe-review, health diagnostics를 담당하며, Azure OpenAI 또는 Microsoft Foundry는 선택적 provider로만 둔다. 상세 추가 요구사항은 `aidlc-docs/inception/requirements/azure-cloud-integration-addendum.md`를 따른다. |
 | Productivity Impact | AI에게 보내기 전 민감정보 제거 시간을 1분에서 5~10초로 단축 |
 | UX & Workflow | 맞춤법 검사기처럼 inline highlight, suggestion card, apply/ignore 제공 |
 | Responsible AI, Security & Trust | 원본 프롬프트를 LLM에 보내지 않고, 사용자가 적용 전 직접 확인 |
@@ -102,7 +101,7 @@ Safe Prompt Guard가 해결하려는 문제는 추상적인 보안 우려가 아
 6. 적용 범위는 이 항목만, 같은 타입 전체, 모든 위험 요소를 지원한다.
 7. 원본 프롬프트는 AI 모델에 보내지 않는다.
 8. Custom Rule Builder를 메인 기능으로 제공해 조직별 custom rule을 사용자가 직접 코딩하지 않고 만들 수 있게 한다.
-9. Azure OpenAI / Microsoft Foundry는 치환된 텍스트만 검토하는 Safe Review 계층으로 사용한다.
+9. Azure Functions를 privacy-preserving serverless processing layer로 사용하고, Azure OpenAI / Microsoft Foundry는 필요 시 치환된 텍스트나 더미 예시만 처리하는 선택적 provider로 제한한다.
 10. 제한 시간 안에 Paste → Scan → Fix → Review → Copy가 동작하는 MVP를 완성한다.
 
 ### MVP 비목표 (기본 기능이 완성될 경우 고려할 수 있다. 반드시 미진행하는 것이 아니다!)
@@ -617,12 +616,14 @@ Azure Static Web Apps
 Azure Functions
   ├─ /api/scan
   ├─ /api/mask
+  ├─ /api/rules/generate
   ├─ /api/rules/preview
-  └─ /api/safe-review
+  ├─ /api/safe-review
+  └─ /api/health
 
 AI Layer
   ├─ Copilot SDK: 더미 예시 기반 custom rule 생성과 테스트 케이스 생성
-  └─ Azure OpenAI / Microsoft Foundry: transformedText Safe Review
+  └─ Azure OpenAI / Microsoft Foundry: optional provider only, not required for the core safety workflow
 ```
 
 역할 분리:
@@ -630,9 +631,9 @@ AI Layer
 | 계층 | 역할 |
 | --- | --- |
 | Frontend | 입력, 하이라이트, 옵션 선택, preview, copy |
-| Azure Functions | rule 기반 탐지, 치환, rule preview, safe-review API |
+| Azure Functions | rule 기반 탐지, 치환, rule generation/preview, safe-review API, health diagnostics |
 | Copilot SDK | custom rule 후보 생성과 테스트 케이스 생성 |
-| Azure OpenAI / Foundry | 치환된 텍스트에 대한 잔여 위험 설명 |
+| Azure OpenAI / Foundry | 선택적 provider. MVP 핵심 안전 흐름은 Azure Functions와 deterministic scanner로 동작 |
 | Browser Session State | 현재 finding, ignored finding, custom rule 관리 |
 
 중요 원칙:
@@ -641,6 +642,10 @@ AI Layer
 - Safe Review에는 치환된 `transformedText`만 전달한다.
 - 원본 request body를 장기 로그로 남기지 않는다.
 - API 응답은 사용자가 판단하기 쉬운 설명을 제공하되, “완전히 안전하다”고 보증하지 않는다.
+
+Cloud integration addendum:
+
+- Detailed English requirements for Azure health diagnostics, Static Web Apps security headers, and cloud API evidence are maintained in `aidlc-docs/inception/requirements/azure-cloud-integration-addendum.md`.
 
 ---
 
@@ -820,6 +825,8 @@ Safe Review 메시지 예시:
 - [ ] `/api/mask` 동작 확인
 - [ ] `/api/rules/preview` 동작 확인
 - [ ] `/api/safe-review` 동작 확인
+- [ ] `/api/health` 동작 확인
+- [ ] Static Web Apps 보안 헤더 설정 또는 defer 사유 확인
 - [ ] 데모 샘플 입력으로 highlight 동작 확인
 - [ ] Finding card에서 변환 방식 선택 동작 확인
 - [ ] partial/full 변경 동작 확인
