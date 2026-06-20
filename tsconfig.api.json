@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "ignoreDeprecations": "6.0",
+    "outDir": "api/build",
+    "rootDir": ".",
+    "strict": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "types": ["node"]
+  },
+  "include": [
+    "api/src/**/*.ts",
+    "src/lib/constants.ts",
+    "src/lib/rules.ts",
+    "src/lib/scan.ts",
+    "src/lib/transform.ts",
+    "src/lib/types.ts",
+    "src/lib/validation.ts"
+  ]
+}
