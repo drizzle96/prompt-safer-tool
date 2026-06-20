@@ -90,7 +90,16 @@ function localRuleGeneration(request: RuleGenerationRequest): RuleGenerationResp
     warnings: ["Local deterministic fallback was used in development mode."],
     falsePositiveRisk: "같은 형식의 일반 문서 번호가 오탐될 수 있습니다.",
     falseNegativeRisk: `${prefix} 외 다른 prefix는 탐지하지 못합니다.`,
-    source: "fallback"
+    source: "fallback",
+    generation: {
+      engine: "fallback",
+      sdkConfigured: false,
+      sdkAttempted: false,
+      runtimeMode: "fallback-only",
+      provider: "copilot",
+      model: "local-fallback",
+      fallbackReason: "Local Vite development mode uses deterministic fallback."
+    }
   };
 }
 

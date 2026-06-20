@@ -61,9 +61,9 @@
 Review and approve UOW-001 code generation plan, then generate scaffold and shared types.
 
 ## Current Construction Unit
-- **Unit**: UOW-010 Safe Output Tab
+- **Unit**: UOW-011 Copilot SDK Runtime Integration
 - **Stage**: Code Generation Complete
-- **Plan**: `aidlc-docs/construction/plans/uow-010-safe-output-tab-code-generation-plan.md`
+- **Plan**: `aidlc-docs/construction/plans/uow-011-copilot-sdk-runtime-integration-code-generation-plan.md`
 - **Status**: Complete
 
 ## Final Verification

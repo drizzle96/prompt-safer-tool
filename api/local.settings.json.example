@@ -2,6 +2,17 @@
   "IsEncrypted": false,
   "Values": {
     "AzureWebJobsStorage": "UseDevelopmentStorage=true",
-    "FUNCTIONS_WORKER_RUNTIME": "node"
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+    "COPILOT_RULE_GENERATION_MODE": "auto",
+    "COPILOT_RULE_MODEL": "gpt-5.4-mini",
+    "COPILOT_USE_LOGGED_IN_USER": "false",
+    "COPILOT_GITHUB_TOKEN": "",
+    "COPILOT_RUNTIME_URL": "",
+    "COPILOT_RUNTIME_TOKEN": "",
+    "COPILOT_RUNTIME_PATH": "",
+    "AZURE_OPENAI_ENDPOINT": "",
+    "AZURE_OPENAI_API_KEY": "",
+    "AZURE_OPENAI_DEPLOYMENT": "",
+    "AZURE_OPENAI_API_VERSION": "2024-10-21"
   }
 }

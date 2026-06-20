@@ -366,7 +366,19 @@ export default function App() {
                     <dd><code>{generatedRule.rule.replacement}</code></dd>
                     <dt>source</dt>
                     <dd>{generatedRule.source}</dd>
+                    <dt>engine</dt>
+                    <dd>{generatedRule.generation.engine}</dd>
+                    <dt>runtime</dt>
+                    <dd>{generatedRule.generation.runtimeMode}</dd>
+                    <dt>SDK</dt>
+                    <dd>{generatedRule.generation.sdkAttempted ? "attempted" : generatedRule.generation.sdkConfigured ? "configured" : "not configured"}</dd>
                   </dl>
+                  {generatedRule.source === "copilot" ? (
+                    <p className="success">Copilot SDK가 rule 후보를 생성했습니다.</p>
+                  ) : (
+                    <p className="warning">Copilot SDK 결과 대신 fallback rule을 사용했습니다.</p>
+                  )}
+                  {generatedRule.generation.fallbackReason && <p className="warning">Reason: {generatedRule.generation.fallbackReason}</p>}
                   {generatedRule.warnings.map((warning) => <p className="warning" key={warning}>{warning}</p>)}
                   <p>{generatedRule.falsePositiveRisk}</p>
                   <p>{generatedRule.falseNegativeRisk}</p>

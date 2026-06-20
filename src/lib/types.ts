@@ -94,6 +94,17 @@ export type RuleGenerationResponse = {
   falsePositiveRisk: string;
   falseNegativeRisk: string;
   source: "copilot" | "fallback";
+  generation: RuleGenerationMetadata;
+};
+
+export type RuleGenerationMetadata = {
+  engine: "copilot-sdk" | "fallback";
+  sdkConfigured: boolean;
+  sdkAttempted: boolean;
+  runtimeMode: "remote-runtime" | "explicit-token" | "logged-in-user" | "custom-runtime" | "default-runtime" | "fallback-only";
+  provider: "copilot" | "azure-openai";
+  model: string;
+  fallbackReason?: string;
 };
 
 export type RuleGenerationTestCase = {

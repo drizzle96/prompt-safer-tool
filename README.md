@@ -56,6 +56,31 @@ In local Vite development, the frontend uses local deterministic fallback for de
 
 The Custom Rule Builder includes a backend adapter for `@github/copilot-sdk`. The adapter attempts Copilot SDK generation and falls back to a deterministic generator under the same response contract when SDK runtime or credentials are unavailable.
 
+To enable live Copilot SDK generation in an API runtime, configure one of these app settings:
+
+- `COPILOT_GITHUB_TOKEN`: GitHub token used by the Copilot SDK runtime. Do not commit this value.
+- `COPILOT_USE_LOGGED_IN_USER=true`: use a locally logged-in GitHub/Copilot user for local Functions testing.
+- `COPILOT_RUNTIME_URL`: connect to an already-running Copilot runtime. Optionally pair with `COPILOT_RUNTIME_TOKEN`.
+- `COPILOT_RUNTIME_PATH`: spawn a custom Copilot runtime executable path.
+- `COPILOT_RULE_MODEL`: model used for rule generation. Default is `gpt-5.4-mini`.
+
+To keep model inference on Azure OpenAI / Microsoft Foundry while still orchestrating through Copilot SDK, configure the SDK provider settings:
+
+- `AZURE_OPENAI_ENDPOINT`
+- `AZURE_OPENAI_API_KEY` or `AZURE_OPENAI_BEARER_TOKEN`
+- `AZURE_OPENAI_DEPLOYMENT`
+- `AZURE_OPENAI_API_VERSION` (defaults to `2024-10-21`)
+
+The equivalent `FOUNDRY_OPENAI_*` names are also accepted.
+
+`COPILOT_RULE_GENERATION_MODE` accepts:
+
+- `auto`: use Copilot SDK only when runtime/auth is configured, otherwise fallback.
+- `required`: attempt Copilot SDK and return fallback diagnostics if it fails.
+- `fallback`: disable SDK calls and use deterministic fallback only.
+
+Rule generation responses include `generation.engine`, `generation.runtimeMode`, `generation.sdkConfigured`, and `generation.sdkAttempted` so the UI can show whether the result came from Copilot SDK or fallback.
+
 ## Azure Readiness
 
 - Frontend: React + Vite TypeScript app suitable for Azure Static Web Apps.

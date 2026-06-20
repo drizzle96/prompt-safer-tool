@@ -367,6 +367,11 @@ pre {
   font-weight: 700;
 }
 
+.success {
+  color: #047857;
+  font-weight: 700;
+}
+
 @media (max-width: 860px) {
   .app-shell {
     padding: 20px;
