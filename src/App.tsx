@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { DEMO_PROMPT } from "./lib/constants";
-import { generateRule, maskPrompt, previewRule, runSafeReview, scanPrompt } from "./lib/apiClient";
+import { generateRule, previewRule, runSafeReview, scanPrompt } from "./lib/apiClient";
+import { composeSafeOutput, getFindingDisplayValue, getScopedFindingIds, type AppliedTransformChoice } from "./lib/output";
 import type {
   ApplyScope,
   Finding,
@@ -28,10 +29,11 @@ const DEFAULT_CHOICE: TransformChoice = {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<WorkspaceTab>("prompt");
-  const [text, setText] = useState(DEMO_PROMPT);
+  const [sourceText, setSourceText] = useState(DEMO_PROMPT);
   const [findings, setFindings] = useState<Finding[]>([]);
   const [selectedFindingId, setSelectedFindingId] = useState<string | null>(null);
   const [choices, setChoices] = useState<Record<string, TransformChoice>>({});
+  const [appliedChoices, setAppliedChoices] = useState<Record<string, AppliedTransformChoice>>({});
   const [globalChoice, setGlobalChoice] = useState<TransformChoice>({ ...DEFAULT_CHOICE, scope: "all" });
   const [ignoredFindingIds, setIgnoredFindingIds] = useState<string[]>([]);
   const [review, setReview] = useState<SafeReviewResponse | null>(null);
@@ -41,7 +43,8 @@ export default function App() {
   const [generatedRule, setGeneratedRule] = useState<RuleGenerationResponse | null>(null);
   const [rulePreview, setRulePreview] = useState<RulePreviewResponse | null>(null);
 
-  const pendingFindings = findings.filter((finding) => !ignoredFindingIds.includes(finding.id));
+  const safeOutput = useMemo(() => composeSafeOutput(sourceText, findings, appliedChoices), [appliedChoices, findings, sourceText]);
+  const pendingFindings = findings.filter((finding) => !ignoredFindingIds.includes(finding.id) && !appliedChoices[finding.id]);
   const selectedFinding = findings.find((finding) => finding.id === selectedFindingId) ?? findings[0];
 
   const findingChoices = useMemo(() => {
@@ -56,50 +59,46 @@ export default function App() {
   }, [choices, findings]);
 
   async function handleScan() {
-    const result = await scanPrompt({ text, customRules });
+    const result = await scanPrompt({ text: sourceText, customRules });
     setFindings(result.findings);
     setSelectedFindingId(result.findings[0]?.id ?? null);
     setIgnoredFindingIds([]);
+    setAppliedChoices({});
     setReview(null);
     setStatus(result.findings.length > 0 ? `총 ${result.findings.length}개의 위험 요소를 찾았습니다.` : "탐지된 위험 요소가 없습니다.");
   }
 
-  async function handleApply(finding: Finding) {
+  function handleApply(finding: Finding) {
     const choice = findingChoices[finding.id] ?? DEFAULT_CHOICE;
-    const result = await maskPrompt({
-      text,
-      findings,
-      findingIds: [finding.id],
-      mode: choice.mode,
-      depth: choice.mode === "placeholder" ? undefined : choice.depth,
-      scope: choice.scope,
-      customRules
-    });
-    applyMaskResult(result.transformedText, result.findings, result.applied.length);
+    applyChoicesForFindings(getScopedFindingIds(findings, finding.id, choice.scope), choice);
   }
 
-  async function handleApplyAll() {
-    const result = await maskPrompt({
-      text,
-      findings: pendingFindings,
-      mode: globalChoice.mode,
-      depth: globalChoice.mode === "placeholder" ? undefined : globalChoice.depth,
-      scope: "all",
-      customRules
-    });
-    applyMaskResult(result.transformedText, result.findings, result.applied.length);
+  function handleApplyAll() {
+    applyChoicesForFindings(pendingFindings.map((finding) => finding.id), globalChoice);
   }
 
   function handleIgnore(finding: Finding) {
     setIgnoredFindingIds((current) => [...new Set([...current, finding.id])]);
+    setAppliedChoices((current) => {
+      const next = { ...current };
+      delete next[finding.id];
+      return next;
+    });
+    setReview(null);
     setStatus("무시한 항목은 원본 값이 그대로 남습니다.");
   }
 
   async function handleSafeReview() {
     const response = await runSafeReview({
-      transformedText: text,
+      transformedText: safeOutput,
       findings,
-      applied: [],
+      applied: Object.entries(appliedChoices).map(([findingId, choice]) => ({
+        findingId,
+        originalValue: findings.find((finding) => finding.id === findingId)?.value ?? "",
+        transformedValue: "",
+        mode: choice.mode,
+        depth: choice.depth
+      })),
       ignoredCount: ignoredFindingIds.length,
       ignoredTypes: findings.filter((finding) => ignoredFindingIds.includes(finding.id)).map((finding) => finding.type)
     });
@@ -108,7 +107,7 @@ export default function App() {
   }
 
   async function handleCopy() {
-    await navigator.clipboard.writeText(text);
+    await navigator.clipboard.writeText(safeOutput);
     setStatus("복사되었습니다. 이제 안전한 프롬프트를 AI 도구에 붙여넣을 수 있습니다.");
   }
 
@@ -133,13 +132,34 @@ export default function App() {
     setStatus("Custom rule이 현재 세션에 추가되었습니다. Scan을 다시 실행해보세요.");
   }
 
-  function applyMaskResult(transformedText: string, refreshedFindings: Finding[], appliedCount: number) {
-    setText(transformedText);
-    setFindings(refreshedFindings);
-    setSelectedFindingId(refreshedFindings[0]?.id ?? null);
+  function handleSourceTextChange(nextText: string) {
+    setSourceText(nextText);
+    setFindings([]);
+    setSelectedFindingId(null);
     setIgnoredFindingIds([]);
+    setAppliedChoices({});
+    setChoices({});
     setReview(null);
-    setStatus(`${appliedCount}개 항목을 적용했습니다.`);
+    setStatus("프롬프트가 변경되었습니다. 다시 Scan을 실행하세요.");
+  }
+
+  function applyChoicesForFindings(findingIds: string[], choice: TransformChoice) {
+    const ignoredIds = new Set(ignoredFindingIds);
+    const targetIds = findingIds.filter((findingId) => !ignoredIds.has(findingId));
+    if (targetIds.length === 0) return;
+
+    setAppliedChoices((current) => {
+      const next = { ...current };
+      for (const findingId of targetIds) {
+        next[findingId] = {
+          mode: choice.mode,
+          depth: choice.mode === "placeholder" ? undefined : choice.depth
+        };
+      }
+      return next;
+    });
+    setReview(null);
+    setStatus(`${targetIds.length}개 항목을 Safe Output에 적용했습니다. 원본 프롬프트는 변경하지 않았습니다.`);
   }
 
   function updateChoice(findingId: string, patch: Partial<TransformChoice>) {
@@ -217,9 +237,9 @@ export default function App() {
           <section className="workspace" aria-label="Prompt guard workspace">
             <div className="editor-panel">
               <label htmlFor="prompt-input">Prompt</label>
-              <textarea id="prompt-input" data-testid="prompt-input" value={text} onChange={(event) => setText(event.target.value)} />
+              <textarea id="prompt-input" data-testid="prompt-input" value={sourceText} onChange={(event) => handleSourceTextChange(event.target.value)} />
               <div className="highlight-preview" aria-label="Highlight preview">
-                {renderHighlightedText(text, findings, selectedFinding?.id ?? null, setSelectedFindingId, ignoredFindingIds)}
+                {renderHighlightedText(sourceText, findings, selectedFinding?.id ?? null, setSelectedFindingId, ignoredFindingIds, appliedChoices)}
               </div>
             </div>
 
@@ -230,10 +250,11 @@ export default function App() {
                 const choice = findingChoices[finding.id] ?? DEFAULT_CHOICE;
                 const ignored = ignoredFindingIds.includes(finding.id);
                 return (
-                  <article className={`finding-card ${selectedFindingId === finding.id ? "selected" : ""}`} key={finding.id}>
+                  <article className={`finding-card ${selectedFindingId === finding.id ? "selected" : ""} ${appliedChoices[finding.id] ? "applied" : ""}`} key={finding.id}>
                     <div className="finding-card-header">
                       <span className={`severity ${finding.severity}`}>{finding.severity}</span>
                       <strong>{finding.type}</strong>
+                      {appliedChoices[finding.id] && <span className="state-pill">applied</span>}
                     </div>
                     <p>{finding.reason}</p>
                     <code>{finding.value}</code>
@@ -268,7 +289,7 @@ export default function App() {
           <section className="output-panel" aria-label="Safe output preview">
             <div>
               <h2>Safe Output Preview</h2>
-              <pre>{text}</pre>
+              <pre>{safeOutput}</pre>
               <p className="status-line">{status}</p>
             </div>
             <div className="review-panel">
@@ -351,7 +372,8 @@ function renderHighlightedText(
   findings: Finding[],
   selectedFindingId: string | null,
   onSelect: (findingId: string) => void,
-  ignoredFindingIds: string[]
+  ignoredFindingIds: string[],
+  appliedChoices: Record<string, AppliedTransformChoice>
 ) {
   if (findings.length === 0) return <span>{text}</span>;
 
@@ -362,14 +384,15 @@ function renderHighlightedText(
     if (cursor < finding.start) {
       nodes.push(<span key={`text-${cursor}`}>{text.slice(cursor, finding.start)}</span>);
     }
+    const displayValue = getFindingDisplayValue(finding, appliedChoices);
     nodes.push(
       <button
         type="button"
         key={finding.id}
-        className={`highlight ${finding.severity} ${selectedFindingId === finding.id ? "selected" : ""} ${ignoredFindingIds.includes(finding.id) ? "ignored" : ""}`}
+        className={`highlight ${finding.severity} ${selectedFindingId === finding.id ? "selected" : ""} ${ignoredFindingIds.includes(finding.id) ? "ignored" : ""} ${appliedChoices[finding.id] ? "applied" : ""}`}
         onClick={() => onSelect(finding.id)}
       >
-        {text.slice(finding.start, finding.end)}
+        {displayValue}
       </button>
     );
     cursor = finding.end;

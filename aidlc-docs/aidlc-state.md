@@ -61,9 +61,9 @@
 Review and approve UOW-001 code generation plan, then generate scaffold and shared types.
 
 ## Current Construction Unit
-- **Unit**: UOW-007 Tabbed Workspace Separation
+- **Unit**: UOW-008 Preserve Original Prompt
 - **Stage**: Code Generation Complete
-- **Plan**: `aidlc-docs/construction/plans/uow-007-tabbed-workspace-code-generation-plan.md`
+- **Plan**: `aidlc-docs/construction/plans/uow-008-preserve-original-prompt-code-generation-plan.md`
 - **Status**: Complete
 
 ## Final Verification

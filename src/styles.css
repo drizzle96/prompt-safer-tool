@@ -212,6 +212,10 @@ textarea {
   background: #e6fffb;
 }
 
+.highlight.applied {
+  background: #ecfdf5;
+}
+
 .highlight.ignored {
   opacity: 0.55;
 }
@@ -229,6 +233,10 @@ textarea {
 
 .finding-card.selected {
   border-color: #1f6f68;
+}
+
+.finding-card.applied {
+  background: #f7fffb;
 }
 
 .finding-card-header,
@@ -268,6 +276,16 @@ textarea {
 
 .severity.low {
   background: #2563eb;
+}
+
+.state-pill {
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: #d1fae5;
+  color: #047857;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
 }
 
 .output-panel,

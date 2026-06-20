@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEMO_PROMPT } from "./constants";
+import { composeSafeOutput, getFindingDisplayValue, getScopedFindingIds } from "./output";
 import { scanText } from "./scan";
 import { applyTransforms } from "./transform";
 
@@ -65,5 +66,47 @@ describe("core scan and transform engine", () => {
     });
 
     expect(masked.transformedText).toContain("de***@example.com");
+  });
+
+  it("composes safe output without mutating the original prompt", () => {
+    const original = "담당자 이메일은 dev.owner@example.com 이고 서버 IP는 10.10.20.30 입니다.";
+    const scan = scanText({ text: original });
+    const email = scan.findings.find((finding) => finding.type === "email");
+    const ipAddress = scan.findings.find((finding) => finding.type === "ip_address");
+
+    expect(email).toBeDefined();
+    expect(ipAddress).toBeDefined();
+
+    const safeOutput = composeSafeOutput(original, scan.findings, {
+      [email!.id]: { mode: "placeholder" },
+      [ipAddress!.id]: { mode: "masking", depth: "partial" }
+    });
+
+    expect(original).toContain("dev.owner@example.com");
+    expect(original).toContain("10.10.20.30");
+    expect(safeOutput).toContain("[EMAIL]");
+    expect(safeOutput).toContain("10.***.***.30");
+  });
+
+  it("selects same-type finding ids for output-only transforms", () => {
+    const scan = scanText({ text: "a@example.com b@example.com 10.10.20.30" });
+    const email = scan.findings.find((finding) => finding.type === "email");
+
+    expect(email).toBeDefined();
+
+    const selectedIds = getScopedFindingIds(scan.findings, email!.id, "same_type");
+
+    expect(selectedIds).toHaveLength(2);
+    expect(scan.findings.filter((finding) => selectedIds.includes(finding.id)).every((finding) => finding.type === "email")).toBe(true);
+  });
+
+  it("displays transformed finding values outside the original prompt editor", () => {
+    const original = "담당자 이메일은 dev.owner@example.com 입니다.";
+    const scan = scanText({ text: original });
+    const email = scan.findings.find((finding) => finding.type === "email");
+
+    expect(email).toBeDefined();
+    expect(getFindingDisplayValue(email!, {})).toBe("dev.owner@example.com");
+    expect(getFindingDisplayValue(email!, { [email!.id]: { mode: "placeholder" } })).toBe("[EMAIL]");
   });
 });
