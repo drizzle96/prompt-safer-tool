@@ -118,6 +118,11 @@ h1 {
   max-width: none;
 }
 
+.tab-panel > .output-panel,
+.tab-panel > .rule-builder-panel {
+  margin-top: 0;
+}
+
 select,
 button {
   min-height: 38px;

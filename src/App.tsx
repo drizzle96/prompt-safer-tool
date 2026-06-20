@@ -19,7 +19,7 @@ type TransformChoice = {
   scope: ApplyScope;
 };
 
-type WorkspaceTab = "prompt" | "rules";
+type WorkspaceTab = "prompt" | "output" | "rules";
 
 const DEFAULT_CHOICE: TransformChoice = {
   mode: "placeholder",
@@ -44,6 +44,7 @@ export default function App() {
   const [rulePreview, setRulePreview] = useState<RulePreviewResponse | null>(null);
 
   const safeOutput = useMemo(() => composeSafeOutput(sourceText, findings, appliedChoices), [appliedChoices, findings, sourceText]);
+  const appliedCount = Object.keys(appliedChoices).length;
   const pendingFindings = findings.filter((finding) => !ignoredFindingIds.includes(finding.id) && !appliedChoices[finding.id]);
   const selectedFinding = findings.find((finding) => finding.id === selectedFindingId) ?? findings[0];
 
@@ -195,6 +196,18 @@ export default function App() {
         </button>
         <button
           type="button"
+          id="tab-output"
+          role="tab"
+          aria-selected={activeTab === "output"}
+          aria-controls="panel-output"
+          className="tab-button"
+          onClick={() => setActiveTab("output")}
+        >
+          세이프 아웃풋
+          <span>{appliedCount > 0 ? `${appliedCount}개 적용` : "프리뷰"}</span>
+        </button>
+        <button
+          type="button"
           id="tab-rules"
           role="tab"
           aria-selected={activeTab === "rules"}
@@ -289,9 +302,14 @@ export default function App() {
               })}
             </aside>
           </section>
+        </div>
+      )}
 
+      {activeTab === "output" && (
+        <div id="panel-output" role="tabpanel" aria-labelledby="tab-output" className="tab-panel">
           <section className="output-panel" aria-label="Safe output preview">
             <div>
+              <p className="eyebrow">Safe Output</p>
               <h2>Safe Output Preview</h2>
               <pre>{safeOutput}</pre>
               <p className="status-line">{status}</p>
