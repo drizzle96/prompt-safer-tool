@@ -9,6 +9,7 @@ When Azure Functions local runtime is configured, verify:
 3. `POST /api/rules/generate` returns a rule candidate.
 4. `POST /api/rules/preview` returns preview output.
 5. `POST /api/safe-review` accepts transformed text only.
+6. `GET /api/health` returns safe runtime, privacy, endpoint, and Copilot diagnostics without secrets.
 
 ## Frontend Integration Checks
 

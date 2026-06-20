@@ -8,6 +8,8 @@
 - Confirm invalid API body shapes return safe JSON errors.
 - Confirm Rule Builder warns users to use dummy examples.
 - Confirm generated rules require approval before session activation.
+- Confirm `GET /api/health` does not expose secrets, tokens, raw prompts, stack traces, or internal paths.
+- Confirm `public/staticwebapp.config.json` includes Static Web Apps security headers or a documented deferral.
 
 ## Dependency Check
 

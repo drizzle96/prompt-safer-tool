@@ -4,6 +4,40 @@ Safe Prompt Guard is a web app that helps users sanitize prompts before sending 
 
 It works like a spell checker for sensitive information. Instead of spelling mistakes, it highlights emails, API keys, bearer tokens, internal URLs, IP addresses, `.env` style secrets, and approved custom patterns.
 
+## Azure Cloud Integration Evidence
+
+- Frontend runtime: Azure Static Web Apps hosting a React/Vite web app.
+- Backend runtime: Azure Functions Node 20 API routes under `/api/*`.
+- Cloud processing role: Azure Functions performs scan, mask, custom rule generation, custom rule preview, safe-review compatibility, and health diagnostics.
+- Runtime diagnostics: `GET /api/health` returns a safe public status payload for automated judging.
+- Privacy contract: prompts are processed per request only; raw prompts are not stored, cached, or logged.
+- Deployment security: `public/staticwebapp.config.json` configures API routing, SPA fallback exclusions, and HTTP security headers.
+
+Health check example after deployment:
+
+```bash
+curl https://<deployment-url>/api/health
+```
+
+Expected health response shape:
+
+```json
+{
+	"service": "safe-prompt-guard-api",
+	"status": "ok",
+	"runtime": "azure-functions-node20",
+	"privacy": {
+		"storesPrompts": false,
+		"logsRawPrompts": false,
+		"safeReviewAcceptsOriginalText": false
+	},
+	"copilot": {
+		"generationMode": "auto",
+		"sdkConfigured": true
+	}
+}
+```
+
 ## Demo Flow
 
 1. Open the app.
@@ -39,6 +73,7 @@ npm run build
 - `POST /api/rules/generate`
 - `POST /api/rules/preview`
 - `POST /api/safe-review`
+- `GET /api/health`
 
 In local Vite development, the frontend uses local deterministic fallback for demo continuity. In Azure Static Web Apps, the API routes are intended to be served by Azure Functions.
 

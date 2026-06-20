@@ -1,5 +1,9 @@
 # E2E Test Instructions
 
+## Pending Safe Output Removal
+
+For the upcoming Safe Output removal work, use the dedicated TC set at `aidlc-docs/construction/uow-012-remove-safe-output-workflow/test-cases/test-case-set.md`. That TC set supersedes the Safe Output, Safe Review, and Copy steps below only after UOW-012 implementation begins.
+
 ## Demo E2E Flow
 
 1. Start the app with `npm run dev`.
