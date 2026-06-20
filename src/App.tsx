@@ -238,7 +238,11 @@ export default function App() {
             <div className="editor-panel">
               <label htmlFor="prompt-input">Prompt</label>
               <textarea id="prompt-input" data-testid="prompt-input" value={sourceText} onChange={(event) => handleSourceTextChange(event.target.value)} />
-              <div className="highlight-preview" aria-label="Highlight preview">
+              <div className="preview-label-row">
+                <span id="highlight-preview-label" className="preview-label">검출 결과 미리보기</span>
+                <span className="preview-helper">적용한 치환 결과가 이 영역에 반영됩니다.</span>
+              </div>
+              <div className="highlight-preview" aria-labelledby="highlight-preview-label">
                 {renderHighlightedText(sourceText, findings, selectedFinding?.id ?? null, setSelectedFindingId, ignoredFindingIds, appliedChoices)}
               </div>
             </div>

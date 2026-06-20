@@ -162,6 +162,26 @@ button:disabled {
   font-weight: 700;
 }
 
+.preview-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  margin-bottom: 8px;
+}
+
+.preview-label {
+  color: #102a43;
+  font-weight: 700;
+}
+
+.preview-helper {
+  color: #627d98;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
 textarea {
   width: 100%;
   min-height: 360px;
@@ -173,7 +193,6 @@ textarea {
 }
 
 .highlight-preview {
-  margin-top: 14px;
   min-height: 180px;
   white-space: pre-wrap;
   border: 1px solid #d9e2ec;
@@ -360,6 +379,12 @@ pre {
   .tab-button {
     justify-content: space-between;
     border-radius: 8px;
+  }
+
+  .preview-label-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
   }
 
   .app-header,
