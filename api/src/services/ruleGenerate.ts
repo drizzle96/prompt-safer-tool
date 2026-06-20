@@ -1,6 +1,9 @@
 import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
+import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import { readFile, rm, writeFile } from "node:fs/promises";
 import { scanText } from "../../../src/lib/scan";
 import type { Rule, RuleGenerationMetadata, RuleGenerationRequest, RuleGenerationResponse } from "../../../src/lib/types";
 
@@ -87,78 +90,85 @@ export async function generateRuleCandidate(request: RuleGenerationRequest): Pro
 }
 
 async function generateWithCopilotSdk(request: RuleGenerationRequest, runtimeConfig: CopilotRuntimeConfig): Promise<RuleGenerationResponse> {
-  const { CopilotClient, RuntimeConnection, approveAll } = await import("@github/copilot-sdk");
-  const client = new CopilotClient({
-    connection: runtimeConfig.runtimeUrl
-      ? RuntimeConnection.forUri(runtimeConfig.runtimeUrl, { connectionToken: runtimeConfig.runtimeToken })
-      : RuntimeConnection.forStdio({ path: runtimeConfig.runtimePath ?? runtimeConfig.cliPath }),
-    logLevel: "error",
-    mode: "copilot-cli",
-    baseDirectory: runtimeConfig.baseDirectory,
-    gitHubToken: runtimeConfig.gitHubToken,
-    useLoggedInUser: runtimeConfig.useLoggedInUser,
-    env: process.env
+  const parsed = await runCopilotWorker(request, runtimeConfig);
+  const fallback = fallbackRuleCandidate(request.exampleText, [], {
+    engine: "copilot-sdk",
+    sdkConfigured: runtimeConfig.sdkConfigured,
+    sdkAttempted: true,
+    runtimeMode: runtimeConfig.runtimeMode,
+    provider: runtimeConfig.provider,
+    model: runtimeConfig.model
   });
-  await client.start();
-
-  try {
-    const session = await client.createSession({
-      model: runtimeConfig.model,
-      provider: runtimeConfig.azureProvider,
-      onPermissionRequest: approveAll,
-      systemMessage: {
-        content: "You generate Safe Prompt Guard regex rules from dummy examples. Return exactly one compact JSON object and no markdown, prose, comments, or code fences."
-      }
-    });
-
-    let content = "";
-    const done = new Promise<void>((resolve) => {
-      session.on("assistant.message", (event) => {
-        content += event.data.content;
-      });
-      session.on("session.idle", () => resolve());
-    });
-
-    await session.send({
-      prompt: `Create a JSON rule candidate for this dummy example: ${request.exampleText}
-
-Return exactly this shape:
-{"rule":{"name":"...","type":"ticket_id","pattern":"...","replacement":"[TICKET_ID]","severity":"medium","description":"...","examples":["..."],"defaultTransform":{"mode":"placeholder"}},"tests":[{"input":"...","expected":"..."}],"warnings":[],"falsePositiveRisk":"...","falseNegativeRisk":"..."}
-
-Rules:
-- If the example contains a ticket ID like PREFIX-YYYY-NNNN, generalize to pattern "\\bPREFIX-\\d{4}-\\d{4}\\b" instead of matching only one exact ID.
-- Use only dummy examples.
-- Do not include markdown or explanatory text.`
-    });
-    await done;
-    await session.disconnect();
-
-    const parsed = parseCopilotRuleResponse(content);
-    const fallback = fallbackRuleCandidate(request.exampleText, [], {
+  return {
+    ...fallback,
+    ...parsed,
+    rule: { ...fallback.rule, ...parsed.rule },
+    source: "copilot",
+    generation: {
       engine: "copilot-sdk",
       sdkConfigured: runtimeConfig.sdkConfigured,
       sdkAttempted: true,
       runtimeMode: runtimeConfig.runtimeMode,
       provider: runtimeConfig.provider,
       model: runtimeConfig.model
+    }
+  };
+}
+
+async function runCopilotWorker(request: RuleGenerationRequest, runtimeConfig: CopilotRuntimeConfig): Promise<Partial<RuleGenerationResponse> & { rule?: Partial<Rule> }> {
+  const workerPath = path.join(__dirname, "copilotRuleWorker.js");
+  const requestId = randomUUID();
+  const inputPath = path.join(os.tmpdir(), `safe-prompt-copilot-${requestId}.input.json`);
+  const outputPath = path.join(os.tmpdir(), `safe-prompt-copilot-${requestId}.output.json`);
+  const payload = JSON.stringify({
+    request,
+    model: runtimeConfig.model,
+    runtimePath: runtimeConfig.runtimePath ?? runtimeConfig.cliPath,
+    runtimeUrl: runtimeConfig.runtimeUrl,
+    runtimeToken: runtimeConfig.runtimeToken,
+    baseDirectory: runtimeConfig.baseDirectory,
+    useLoggedInUser: runtimeConfig.useLoggedInUser,
+    azureProvider: runtimeConfig.azureProvider
+  });
+
+  await writeFile(inputPath, payload, "utf8");
+
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [workerPath, inputPath, outputPath], {
+      env: process.env,
+      stdio: ["ignore", "pipe", "pipe"]
     });
-    return {
-      ...fallback,
-      ...parsed,
-      rule: { ...fallback.rule, ...parsed.rule },
-      source: "copilot",
-      generation: {
-        engine: "copilot-sdk",
-        sdkConfigured: runtimeConfig.sdkConfigured,
-        sdkAttempted: true,
-        runtimeMode: runtimeConfig.runtimeMode,
-        provider: runtimeConfig.provider,
-        model: runtimeConfig.model
+    let stderr = "";
+    const timeout = setTimeout(() => {
+      child.kill("SIGTERM");
+      reject(new Error("Copilot SDK worker timed out"));
+    }, Number(process.env.COPILOT_RULE_TIMEOUT_MS ?? 120000));
+
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk);
+    });
+    child.on("error", (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
+    child.on("close", async (code) => {
+      clearTimeout(timeout);
+      try {
+        if (code !== 0) {
+          throw new Error(`Copilot SDK worker exited with code ${code}: ${stderr.slice(0, 500)}`);
+        }
+        const stdout = await readFile(outputPath, "utf8");
+        const output = JSON.parse(stdout) as { ok: true; parsed: Partial<RuleGenerationResponse> & { rule?: Partial<Rule> } } | { ok: false; error: string };
+        if (!output.ok) reject(new Error(output.error));
+        else resolve(output.parsed);
+      } catch (error) {
+        reject(new Error(`Copilot SDK worker failed: ${safeErrorMessage(error)}`));
+      } finally {
+        void rm(inputPath, { force: true });
+        void rm(outputPath, { force: true });
       }
-    };
-  } finally {
-    await client.stop();
-  }
+    });
+  });
 }
 
 export function fallbackRuleCandidate(exampleText: string, warnings: string[] = [], generation?: RuleGenerationMetadata): RuleGenerationResponse {
@@ -206,7 +216,7 @@ function getCopilotRuntimeConfig(): CopilotRuntimeConfig {
   const gitHubToken = process.env.COPILOT_GITHUB_TOKEN ?? process.env.GITHUB_TOKEN;
   const runtimeUrl = process.env.COPILOT_RUNTIME_URL;
   const runtimeToken = process.env.COPILOT_RUNTIME_TOKEN;
-  const runtimePath = process.env.COPILOT_RUNTIME_PATH;
+  const runtimePath = process.env.COPILOT_RUNTIME_PATH ?? process.env.COPILOT_CLI_PATH ?? resolveAzureCopilotCliPath();
   const cliPath = runtimePath ?? resolveBundledCopilotCliPath();
   const useLoggedInUser = process.env.COPILOT_USE_LOGGED_IN_USER === "true";
   const baseDirectory = process.env.COPILOT_HOME ?? path.join(os.tmpdir(), "safe-prompt-guard-copilot");
@@ -264,25 +274,9 @@ function resolveBundledCopilotCliPath(): string | undefined {
   }
 }
 
-function parseCopilotRuleResponse(content: string): Partial<RuleGenerationResponse> & { rule?: Partial<Rule> } {
-  const jsonText = extractJsonObject(content);
-  const parsed = JSON.parse(jsonText) as Partial<RuleGenerationResponse> & { rule?: Partial<Rule> };
-  if (!parsed.rule || typeof parsed.rule.pattern !== "string") {
-    throw new Error("Copilot response did not include a rule.pattern string");
-  }
-  new RegExp(parsed.rule.pattern);
-  return parsed;
-}
-
-function extractJsonObject(content: string): string {
-  const trimmed = content.trim();
-  if (trimmed.startsWith("{")) return trimmed;
-  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/u)?.[1]?.trim();
-  if (fenced?.startsWith("{")) return fenced;
-  const start = trimmed.indexOf("{");
-  const end = trimmed.lastIndexOf("}");
-  if (start >= 0 && end > start) return trimmed.slice(start, end + 1);
-  throw new Error("Copilot response did not contain JSON");
+function resolveAzureCopilotCliPath(): string | undefined {
+  const azurePath = "/home/site/wwwroot/node_modules/@github/copilot-linux-x64/copilot";
+  return process.env.WEBSITE_SITE_NAME ? azurePath : undefined;
 }
 
 function safeErrorMessage(error: unknown): string {
@@ -290,7 +284,7 @@ function safeErrorMessage(error: unknown): string {
   return rawMessage
     .replace(/gh[pousr]_[A-Za-z0-9_]+/gu, "[REDACTED_GITHUB_TOKEN]")
     .replace(/Bearer\s+[A-Za-z0-9._\-]+/gu, "Bearer [REDACTED]")
-    .slice(0, 240);
+    .slice(0, 1000);
 }
 
 function escapeRegex(value: string): string {

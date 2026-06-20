@@ -40,7 +40,7 @@ async function postJson<T>(path: string, body: unknown, fallback: () => T): Prom
   }
 
   try {
-    const response = await fetch(path, {
+    const response = await fetch(buildApiUrl(path), {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body)
@@ -51,6 +51,12 @@ async function postJson<T>(path: string, body: unknown, fallback: () => T): Prom
   } catch {
     return fallback();
   }
+}
+
+function buildApiUrl(path: string): string {
+  const baseUrl = import.meta.env.VITE_API_BASE_URL as string | undefined;
+  if (!baseUrl) return path;
+  return `${baseUrl.replace(/\/$/u, "")}${path}`;
 }
 
 function localSafeReview(request: SafeReviewRequest): SafeReviewResponse {

@@ -86,6 +86,7 @@ Rule generation responses include `generation.engine`, `generation.runtimeMode`,
 - Frontend: React + Vite TypeScript app suitable for Azure Static Web Apps.
 - API: Azure Functions v4 style handlers under `api/src/functions/`.
 - Local settings: copy `api/local.settings.json.example` to `api/local.settings.json` for local Functions work. The real local settings file is gitignored.
+- Dedicated API deployment: set `VITE_API_BASE_URL=https://<function-app>.azurewebsites.net` before `npm run build` when the frontend should call a standalone Azure Functions API instead of SWA managed `/api` routes.
 
 ## Current MVP Notes
 
