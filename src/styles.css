@@ -71,6 +71,53 @@ h1 {
   background: #ffffff;
 }
 
+.workspace-tabs {
+  display: flex;
+  gap: 8px;
+  max-width: 1120px;
+  margin: 0 auto 20px;
+  border-bottom: 1px solid #d9e2ec;
+}
+
+.tab-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  border-color: transparent;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  background: transparent;
+  color: #334e68;
+}
+
+.tab-button[aria-selected="true"] {
+  border-color: #d9e2ec;
+  border-bottom-color: #ffffff;
+  background: #ffffff;
+  color: #102a43;
+}
+
+.tab-button span {
+  border-radius: 999px;
+  background: #e6fffb;
+  color: #1f6f68;
+  padding: 3px 8px;
+  font-size: 0.78rem;
+}
+
+.tab-panel {
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+.tab-panel > .global-fix-bar,
+.tab-panel > .workspace,
+.tab-panel > .output-panel,
+.tab-panel > .rule-builder-panel {
+  max-width: none;
+}
+
 select,
 button {
   min-height: 38px;
@@ -285,6 +332,16 @@ pre {
 
   .workspace {
     grid-template-columns: 1fr;
+  }
+
+  .workspace-tabs {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .tab-button {
+    justify-content: space-between;
+    border-radius: 8px;
   }
 
   .app-header,

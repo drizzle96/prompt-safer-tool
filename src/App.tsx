@@ -18,6 +18,8 @@ type TransformChoice = {
   scope: ApplyScope;
 };
 
+type WorkspaceTab = "prompt" | "rules";
+
 const DEFAULT_CHOICE: TransformChoice = {
   mode: "placeholder",
   depth: "full",
@@ -25,6 +27,7 @@ const DEFAULT_CHOICE: TransformChoice = {
 };
 
 export default function App() {
+  const [activeTab, setActiveTab] = useState<WorkspaceTab>("prompt");
   const [text, setText] = useState(DEMO_PROMPT);
   const [findings, setFindings] = useState<Finding[]>([]);
   const [selectedFindingId, setSelectedFindingId] = useState<string | null>(null);
@@ -69,8 +72,8 @@ export default function App() {
       findingIds: [finding.id],
       mode: choice.mode,
       depth: choice.mode === "placeholder" ? undefined : choice.depth,
-      scope: choice.scope
-      , customRules
+      scope: choice.scope,
+      customRules
     });
     applyMaskResult(result.transformedText, result.findings, result.applied.length);
   }
@@ -81,8 +84,8 @@ export default function App() {
       findings: pendingFindings,
       mode: globalChoice.mode,
       depth: globalChoice.mode === "placeholder" ? undefined : globalChoice.depth,
-      scope: "all"
-      , customRules
+      scope: "all",
+      customRules
     });
     applyMaskResult(result.transformedText, result.findings, result.applied.length);
   }
@@ -157,153 +160,188 @@ export default function App() {
         <p className="trust-note">원본 프롬프트는 AI 모델에 전송되지 않습니다.</p>
       </header>
 
-      <section className="global-fix-bar" aria-label="Global fix bar">
-        <strong>{findings.length > 0 ? `총 ${findings.length}개 위험 요소 발견` : "Scan 대기 중"}</strong>
-        <select
-          data-testid="global-mode-select"
-          value={globalChoice.mode}
-          onChange={(event) => setGlobalChoice((current) => ({ ...current, mode: event.target.value as TransformMode }))}
+      <nav className="workspace-tabs" aria-label="Workspace sections" role="tablist">
+        <button
+          type="button"
+          id="tab-prompt"
+          role="tab"
+          aria-selected={activeTab === "prompt"}
+          aria-controls="panel-prompt"
+          className="tab-button"
+          onClick={() => setActiveTab("prompt")}
         >
-          <option value="masking">마스킹</option>
-          <option value="dummy">더미데이터</option>
-          <option value="placeholder">플레이스홀더</option>
-        </select>
-        {globalChoice.mode !== "placeholder" && (
-          <select
-            data-testid="global-depth-select"
-            value={globalChoice.depth}
-            onChange={(event) => setGlobalChoice((current) => ({ ...current, depth: event.target.value as TransformDepth }))}
-          >
-            <option value="partial">부분 변경</option>
-            <option value="full">전체 변경</option>
-          </select>
-        )}
-        <button type="button" data-testid="scan-button" onClick={handleScan}>Scan</button>
-        <button type="button" data-testid="apply-all-button" onClick={handleApplyAll} disabled={pendingFindings.length === 0}>모두 적용</button>
-      </section>
+          프롬프트 안전성
+          <span>{findings.length > 0 ? `${findings.length}개 탐지` : "검사"}</span>
+        </button>
+        <button
+          type="button"
+          id="tab-rules"
+          role="tab"
+          aria-selected={activeTab === "rules"}
+          aria-controls="panel-rules"
+          className="tab-button"
+          onClick={() => setActiveTab("rules")}
+        >
+          커스텀 규칙
+          <span>{customRules.length > 0 ? `${customRules.length}개 추가` : "생성"}</span>
+        </button>
+      </nav>
 
-      <section className="workspace" aria-label="Prompt guard workspace">
-        <div className="editor-panel">
-          <label htmlFor="prompt-input">Prompt</label>
-          <textarea id="prompt-input" data-testid="prompt-input" value={text} onChange={(event) => setText(event.target.value)} />
-          <div className="highlight-preview" aria-label="Highlight preview">
-            {renderHighlightedText(text, findings, selectedFinding?.id ?? null, setSelectedFindingId, ignoredFindingIds)}
-          </div>
-        </div>
+      {activeTab === "prompt" && (
+        <div id="panel-prompt" role="tabpanel" aria-labelledby="tab-prompt" className="tab-panel">
+          <section className="global-fix-bar" aria-label="Global fix bar">
+            <strong>{findings.length > 0 ? `총 ${findings.length}개 위험 요소 발견` : "Scan 대기 중"}</strong>
+            <select
+              data-testid="global-mode-select"
+              value={globalChoice.mode}
+              onChange={(event) => setGlobalChoice((current) => ({ ...current, mode: event.target.value as TransformMode }))}
+            >
+              <option value="masking">마스킹</option>
+              <option value="dummy">더미데이터</option>
+              <option value="placeholder">플레이스홀더</option>
+            </select>
+            {globalChoice.mode !== "placeholder" && (
+              <select
+                data-testid="global-depth-select"
+                value={globalChoice.depth}
+                onChange={(event) => setGlobalChoice((current) => ({ ...current, depth: event.target.value as TransformDepth }))}
+              >
+                <option value="partial">부분 변경</option>
+                <option value="full">전체 변경</option>
+              </select>
+            )}
+            <button type="button" data-testid="scan-button" onClick={handleScan}>Scan</button>
+            <button type="button" data-testid="apply-all-button" onClick={handleApplyAll} disabled={pendingFindings.length === 0}>모두 적용</button>
+          </section>
 
-        <aside className="findings-panel" aria-label="Findings panel">
-          <h2>Findings</h2>
-          {findings.length === 0 && <p>탐지된 위험 요소가 없습니다.</p>}
-          {findings.map((finding) => {
-            const choice = findingChoices[finding.id] ?? DEFAULT_CHOICE;
-            const ignored = ignoredFindingIds.includes(finding.id);
-            return (
-              <article className={`finding-card ${selectedFindingId === finding.id ? "selected" : ""}`} key={finding.id}>
-                <div className="finding-card-header">
-                  <span className={`severity ${finding.severity}`}>{finding.severity}</span>
-                  <strong>{finding.type}</strong>
-                </div>
-                <p>{finding.reason}</p>
-                <code>{finding.value}</code>
-                <div className="control-row">
-                  <select value={choice.mode} onChange={(event) => updateChoice(finding.id, { mode: event.target.value as TransformMode })}>
-                    <option value="masking">마스킹</option>
-                    <option value="dummy">더미데이터</option>
-                    <option value="placeholder">플레이스홀더</option>
-                  </select>
-                  {choice.mode !== "placeholder" && (
-                    <select value={choice.depth} onChange={(event) => updateChoice(finding.id, { depth: event.target.value as TransformDepth })}>
-                      <option value="partial">부분</option>
-                      <option value="full">전체</option>
-                    </select>
-                  )}
-                  <select value={choice.scope} onChange={(event) => updateChoice(finding.id, { scope: event.target.value as ApplyScope })}>
-                    <option value="selected">이 항목만</option>
-                    <option value="same_type">같은 타입 전체</option>
-                    <option value="all">모든 위험 요소</option>
-                  </select>
-                </div>
-                <div className="button-row">
-                  <button type="button" data-testid={`finding-${finding.id}-apply-button`} onClick={() => handleApply(finding)} disabled={ignored}>적용</button>
-                  <button type="button" data-testid={`finding-${finding.id}-ignore-button`} onClick={() => handleIgnore(finding)} disabled={ignored}>무시</button>
-                </div>
-              </article>
-            );
-          })}
-        </aside>
-      </section>
-
-      <section className="output-panel" aria-label="Safe output preview">
-        <div>
-          <h2>Safe Output Preview</h2>
-          <pre>{text}</pre>
-          <p className="status-line">{status}</p>
-        </div>
-        <div className="review-panel">
-          <div className="button-row">
-            <button type="button" data-testid="safe-review-button" onClick={handleSafeReview}>Safe Review</button>
-            <button type="button" data-testid="copy-output-button" onClick={handleCopy}>Copy</button>
-          </div>
-          {review && (
-            <div className="review-result">
-              <strong>Safe Review: {review.riskLevel}</strong>
-              <p>{review.summary}</p>
-              <ul>
-                {review.remainingConcerns.map((concern) => <li key={concern}>{concern}</li>)}
-              </ul>
-              <p>{review.recommendation}</p>
+          <section className="workspace" aria-label="Prompt guard workspace">
+            <div className="editor-panel">
+              <label htmlFor="prompt-input">Prompt</label>
+              <textarea id="prompt-input" data-testid="prompt-input" value={text} onChange={(event) => setText(event.target.value)} />
+              <div className="highlight-preview" aria-label="Highlight preview">
+                {renderHighlightedText(text, findings, selectedFinding?.id ?? null, setSelectedFindingId, ignoredFindingIds)}
+              </div>
             </div>
-          )}
-        </div>
-      </section>
 
-      <section className="rule-builder-panel" aria-label="Custom rule builder">
-        <div>
-          <p className="eyebrow">Custom Rule Builder</p>
-          <h2>조직별 패턴 추가</h2>
-          <p className="trust-note">실제 secret이나 고객정보를 입력하지 마세요. 형식만 비슷한 더미 예시를 사용하세요.</p>
-          <textarea
-            data-testid="rule-builder-example-input"
-            value={ruleExample}
-            onChange={(event) => setRuleExample(event.target.value)}
-            aria-label="Rule builder dummy example"
-          />
-          <div className="button-row">
-            <button type="button" data-testid="rule-generate-button" onClick={handleGenerateRule}>Generate Rule</button>
-            <button type="button" data-testid="rule-preview-button" onClick={handlePreviewRule} disabled={!generatedRule}>Preview</button>
-            <button type="button" data-testid="rule-approve-button" onClick={handleApproveRule} disabled={!generatedRule}>세션에 추가</button>
-          </div>
-        </div>
-        <div className="rule-preview-card">
-          <h3>Rule Preview</h3>
-          {generatedRule ? (
-            <>
-              <dl>
-                <dt>type</dt>
-                <dd>{generatedRule.rule.type}</dd>
-                <dt>pattern</dt>
-                <dd><code>{generatedRule.rule.pattern}</code></dd>
-                <dt>replacement</dt>
-                <dd><code>{generatedRule.rule.replacement}</code></dd>
-                <dt>source</dt>
-                <dd>{generatedRule.source}</dd>
-              </dl>
-              {generatedRule.warnings.map((warning) => <p className="warning" key={warning}>{warning}</p>)}
-              <p>{generatedRule.falsePositiveRisk}</p>
-              <p>{generatedRule.falseNegativeRisk}</p>
-              {rulePreview && (
+            <aside className="findings-panel" aria-label="Findings panel">
+              <h2>Findings</h2>
+              {findings.length === 0 && <p>탐지된 위험 요소가 없습니다.</p>}
+              {findings.map((finding) => {
+                const choice = findingChoices[finding.id] ?? DEFAULT_CHOICE;
+                const ignored = ignoredFindingIds.includes(finding.id);
+                return (
+                  <article className={`finding-card ${selectedFindingId === finding.id ? "selected" : ""}`} key={finding.id}>
+                    <div className="finding-card-header">
+                      <span className={`severity ${finding.severity}`}>{finding.severity}</span>
+                      <strong>{finding.type}</strong>
+                    </div>
+                    <p>{finding.reason}</p>
+                    <code>{finding.value}</code>
+                    <div className="control-row">
+                      <select value={choice.mode} onChange={(event) => updateChoice(finding.id, { mode: event.target.value as TransformMode })}>
+                        <option value="masking">마스킹</option>
+                        <option value="dummy">더미데이터</option>
+                        <option value="placeholder">플레이스홀더</option>
+                      </select>
+                      {choice.mode !== "placeholder" && (
+                        <select value={choice.depth} onChange={(event) => updateChoice(finding.id, { depth: event.target.value as TransformDepth })}>
+                          <option value="partial">부분</option>
+                          <option value="full">전체</option>
+                        </select>
+                      )}
+                      <select value={choice.scope} onChange={(event) => updateChoice(finding.id, { scope: event.target.value as ApplyScope })}>
+                        <option value="selected">이 항목만</option>
+                        <option value="same_type">같은 타입 전체</option>
+                        <option value="all">모든 위험 요소</option>
+                      </select>
+                    </div>
+                    <div className="button-row">
+                      <button type="button" data-testid={`finding-${finding.id}-apply-button`} onClick={() => handleApply(finding)} disabled={ignored}>적용</button>
+                      <button type="button" data-testid={`finding-${finding.id}-ignore-button`} onClick={() => handleIgnore(finding)} disabled={ignored}>무시</button>
+                    </div>
+                  </article>
+                );
+              })}
+            </aside>
+          </section>
+
+          <section className="output-panel" aria-label="Safe output preview">
+            <div>
+              <h2>Safe Output Preview</h2>
+              <pre>{text}</pre>
+              <p className="status-line">{status}</p>
+            </div>
+            <div className="review-panel">
+              <div className="button-row">
+                <button type="button" data-testid="safe-review-button" onClick={handleSafeReview}>Safe Review</button>
+                <button type="button" data-testid="copy-output-button" onClick={handleCopy}>Copy</button>
+              </div>
+              {review && (
                 <div className="review-result">
-                  <strong>{rulePreview.matched ? "Matched" : "No match"}</strong>
-                  <pre>{rulePreview.transformedText}</pre>
+                  <strong>Safe Review: {review.riskLevel}</strong>
+                  <p>{review.summary}</p>
+                  <ul>
+                    {review.remainingConcerns.map((concern) => <li key={concern}>{concern}</li>)}
+                  </ul>
+                  <p>{review.recommendation}</p>
                 </div>
               )}
-              <p className="status-line">Session custom rules: {customRules.length}</p>
-            </>
-          ) : (
-            <p>더미 예시로 rule 후보를 생성하세요.</p>
-          )}
+            </div>
+          </section>
         </div>
-      </section>
+      )}
+
+      {activeTab === "rules" && (
+        <div id="panel-rules" role="tabpanel" aria-labelledby="tab-rules" className="tab-panel">
+          <section className="rule-builder-panel" aria-label="Custom rule builder">
+            <div>
+              <p className="eyebrow">Custom Rule Builder</p>
+              <h2>조직별 패턴 추가</h2>
+              <p className="trust-note">실제 secret이나 고객정보를 입력하지 마세요. 형식만 비슷한 더미 예시를 사용하세요.</p>
+              <textarea
+                data-testid="rule-builder-example-input"
+                value={ruleExample}
+                onChange={(event) => setRuleExample(event.target.value)}
+                aria-label="Rule builder dummy example"
+              />
+              <div className="button-row">
+                <button type="button" data-testid="rule-generate-button" onClick={handleGenerateRule}>Generate Rule</button>
+                <button type="button" data-testid="rule-preview-button" onClick={handlePreviewRule} disabled={!generatedRule}>Preview</button>
+                <button type="button" data-testid="rule-approve-button" onClick={handleApproveRule} disabled={!generatedRule}>세션에 추가</button>
+              </div>
+            </div>
+            <div className="rule-preview-card">
+              <h3>Rule Preview</h3>
+              {generatedRule ? (
+                <>
+                  <dl>
+                    <dt>type</dt>
+                    <dd>{generatedRule.rule.type}</dd>
+                    <dt>pattern</dt>
+                    <dd><code>{generatedRule.rule.pattern}</code></dd>
+                    <dt>replacement</dt>
+                    <dd><code>{generatedRule.rule.replacement}</code></dd>
+                    <dt>source</dt>
+                    <dd>{generatedRule.source}</dd>
+                  </dl>
+                  {generatedRule.warnings.map((warning) => <p className="warning" key={warning}>{warning}</p>)}
+                  <p>{generatedRule.falsePositiveRisk}</p>
+                  <p>{generatedRule.falseNegativeRisk}</p>
+                  {rulePreview && (
+                    <div className="review-result">
+                      <strong>{rulePreview.matched ? "Matched" : "No match"}</strong>
+                      <pre>{rulePreview.transformedText}</pre>
+                    </div>
+                  )}
+                  <p className="status-line">Session custom rules: {customRules.length}</p>
+                </>
+              ) : (
+                <p>더미 예시로 rule 후보를 생성하세요.</p>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
     </main>
   );
 }
